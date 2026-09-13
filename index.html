@@ -1,0 +1,805 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Volgorde in de zee</title>
+<style>
+:root{
+  --blue:#2b65b3;
+  --aqua:#38b8cf;
+  --good:#43a85b;
+  --bad:#e45d5d;
+  --bank:clamp(128px,22vh,190px)
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{
+  margin:0;height:100%;overflow:hidden;touch-action:none;
+  font-family:ui-rounded,"Arial Rounded MT Bold",Arial,sans-serif;
+  background:#dff6ff;color:#183e67
+}
+button{font:inherit}
+#app{
+  height:100%;
+  padding:max(10px,env(safe-area-inset-top))
+          max(10px,env(safe-area-inset-right))
+          max(10px,env(safe-area-inset-bottom))
+          max(10px,env(safe-area-inset-left));
+  background:linear-gradient(#dff7ff 0 68%,#fff1bc 68%)
+}
+#sea{
+  height:100%;position:relative;border:4px solid #9bdcec;border-radius:28px;overflow:hidden;
+  background:linear-gradient(#eafcff 0 68%,#fff7d8 68%);
+  box-shadow:inset 0 0 40px #fff8
+}
+.bubble{position:absolute;border:2px solid #8fd6e7;border-radius:50%;opacity:.55}
+.b1{width:28px;height:28px;left:5%;top:10%}
+.b2{width:16px;height:16px;left:18%;top:17%}
+.b3{width:22px;height:22px;right:12%;top:12%}
+.b4{width:13px;height:13px;right:25%;top:29%}
+
+#top{
+  position:absolute;top:12px;left:12px;right:12px;height:86px;
+  display:flex;align-items:center;justify-content:center;z-index:30;pointer-events:none
+}
+#toolbar{
+  pointer-events:auto;display:flex;gap:14px;align-items:center;padding:10px 14px;
+  background:#ffffffed;border:3px solid #a9deed;border-radius:24px;
+  box-shadow:0 8px 20px #326a8420
+}
+.iconBtn{
+  width:66px;height:66px;border-radius:20px;border:0;background:#fff;
+  box-shadow:0 4px 10px #2457761e;display:grid;place-items:center;
+  font-size:32px;color:var(--blue);cursor:pointer
+}
+.iconBtn:active{transform:scale(.94)}
+.iconBtn.listen{background:#e8f8ff;border:3px solid #86d0e7}
+.iconBtn.check{background:#eaf9ec;border:3px solid #83ce91}
+.iconBtn.home{background:#fff5d9;border:3px solid #edcf77}
+
+#answerStrip{
+  position:absolute;top:108px;left:50%;
+  transform:translateX(-50%) translateY(-8px);
+  display:flex;gap:9px;padding:9px 12px;background:#ffffffef;
+  border:3px solid #8fd2a0;border-radius:20px;z-index:25;opacity:0;
+  pointer-events:none;transition:.3s ease;box-shadow:0 6px 16px #326a8420
+}
+#answerStrip.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.answerPic{
+  width:clamp(58px,8vw,92px);aspect-ratio:.78;background:white;
+  border:2px solid #8fcbe2;border-radius:13px;padding:4px;object-fit:contain
+}
+
+#slots{
+  position:absolute;left:0;right:0;top:185px;height:calc(68% - 200px);
+  display:flex;justify-content:center;align-items:center;gap:clamp(12px,2vw,28px);
+  z-index:5;pointer-events:none
+}
+.slot{
+  width:clamp(112px,15vw,180px);aspect-ratio:.78;
+  border:4px dashed #64a6cf88;border-radius:24px;background:#ffffff55;
+  display:grid;place-items:center;font-size:clamp(34px,5vw,58px);
+  font-weight:800;color:#4f8bb966;transition:.25s
+}
+.slot.filled{border-color:#9bcde0aa}
+.slot.correct{
+  border:5px solid #62bd74;background:#eaf8edaa;box-shadow:0 0 0 8px #70cb7c22
+}
+.slot.wrong{
+  border:5px solid var(--bad);background:#fff0f0aa
+}
+.card.wrongCard{
+  border-color:var(--bad)!important;
+  box-shadow:0 0 0 6px #e45d5d33,0 7px 18px #194c7026;
+  animation:cardShake .46s ease
+}
+@keyframes cardShake{
+  0%,100%{transform:translateX(0)}
+  20%{transform:translateX(-10px)}
+  40%{transform:translateX(10px)}
+  60%{transform:translateX(-8px)}
+  80%{transform:translateX(8px)}
+}
+
+#bank{
+  position:absolute;left:12px;right:12px;bottom:12px;height:var(--bank);
+  background:#ffffffc9;border:3px solid #c4e9f3;border-radius:26px;z-index:2
+}
+.card{
+  position:absolute;width:110px;background:white;border:3px solid #3472bd;
+  border-radius:18px;padding:5px;box-shadow:0 7px 18px #194c7026;z-index:10;
+  user-select:none;touch-action:none;
+  transition:left .62s cubic-bezier(.2,.8,.2,1),
+             top .62s cubic-bezier(.2,.8,.2,1),
+             transform .18s,box-shadow .18s,border-color .18s
+}
+.card.dragging{
+  transition:transform .12s,box-shadow .12s;
+  transform:scale(1.07) rotate(1deg);
+  box-shadow:0 16px 30px #194c7040;z-index:80
+}
+.card img{width:100%;display:block;border-radius:12px;pointer-events:none}
+.card .name{display:none}
+.card.locked{pointer-events:none}
+
+#start{
+  position:absolute;inset:0;background:linear-gradient(#e5faff,#fff3c8);z-index:100;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:26px
+}
+.startFish{font-size:74px;filter:drop-shadow(0 8px 5px #23618325)}
+#start h1{margin:0;font-size:clamp(30px,5vw,58px);color:#2562a6;text-align:center}
+.levels{display:flex;gap:24px}
+.levelBtn{
+  width:clamp(150px,25vw,230px);height:clamp(125px,20vw,170px);
+  border:4px solid #8bcfe3;border-radius:28px;background:#fff;
+  box-shadow:0 10px 20px #285d7322;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:16px;cursor:pointer
+}
+.levelBtn:active{transform:scale(.97)}
+.levelCards{display:flex;gap:7px}
+.levelCards span{
+  width:30px;height:44px;border:3px solid #3975bd;border-radius:8px;
+  background:linear-gradient(#fff,#e9f7ff)
+}
+.levelNum{font-size:30px;font-weight:900;color:#2967b0}
+
+#feedback{
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(.5);
+  z-index:90;font-size:clamp(72px,11vw,130px);opacity:0;pointer-events:none;transition:.3s
+}
+#feedback.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
+
+@media(max-width:850px){
+  #top{height:72px}
+  .iconBtn{width:58px;height:58px;font-size:28px}
+  #answerStrip{top:94px}
+  #slots{top:165px;height:calc(68% - 180px)}
+  .card{border-radius:14px;padding:4px}
+  .slot{border-radius:19px}
+  .levels{gap:14px}
+}
+@media(max-height:650px){
+  :root{--bank:135px}
+  #top{top:6px}
+  #answerStrip{top:78px}
+  #slots{top:138px;height:calc(68% - 150px)}
+  .iconBtn{width:52px;height:52px;font-size:25px}
+  #toolbar{padding:7px 10px}
+}
+</style>
+<link rel="stylesheet" href="sea.css">
+<link rel="stylesheet" href="projects.css">
+<style>
+#sea.demonstrating .card{z-index:80!important}
+#sea.demonstrating #demoHand{z-index:95}
+</style>
+</head>
+<body>
+<div id="app"><div id="sea">
+  <div class="scenery" aria-hidden="true"><img class="reef" src="assets/decor/foreground.webp" alt=""></div>
+  
+  <p class="play-hint">Luister goed. Wat hoor je eerst?</p>
+  <div id="announcement" class="sr-only" role="status" aria-live="polite"></div>
+  <div class="celebration" aria-hidden="true"></div>
+  <div class="bubble b1"></div><div class="bubble b2"></div>
+  <div class="bubble b3"></div><div class="bubble b4"></div>
+
+  <div id="top">
+    <div id="toolbar">
+      <button class="iconBtn home" id="homeBtn" aria-label="Terug naar start" title="Terug"><svg viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="backWater" x2="0.3" y2="1"><stop stop-color="#f2ffff"/><stop offset="1" stop-color="#9cdeed"/></linearGradient></defs><path d="M29 12Q26 10 23 13L7 28Q3 32 7 36L23 51Q28 55 30 50V41H53Q58 41 58 36V28Q58 23 53 23H30V15Q30 13 29 12Z" fill="url(#backWater)" stroke="#4cacc7" stroke-width="2.5" stroke-linejoin="round"/><path d="M25 16 10 30M33 27H52" fill="none" stroke="#ffffff" stroke-opacity=".75" stroke-width="3" stroke-linecap="round"/></svg></button>
+      <button class="iconBtn listen" id="listenBtn" aria-label="Luister nog eens"><img src="assets/buttons/listen.png" alt="" draggable="false"></button>
+      
+    </div>
+  </div>
+
+  <div id="answerStrip"></div>
+  <div id="slots"></div>
+  <div id="bank"></div>
+  <div id="feedback"></div>
+
+  <div id="start">
+    <div class="startFish"><img src="assets/decor/rainbow.webp" alt="Regenboog de vis"></div>
+    <h1>Volgorde in de zee</h1><p class="intro">Luister, onthoud en leg ze op een rij!</p>
+    <div class="levels">
+      <button class="levelBtn" disabled data-level="3" aria-label="Spelen met drie kaartjes">
+        <div class="levelCards"><span></span><span></span><span></span></div>
+        <div class="levelNum">3 <small>kaartjes</small></div><span class="levelPlay">Spelen ▶</span>
+      </button>
+      <button class="levelBtn" disabled data-level="4" aria-label="Spelen met vier kaartjes">
+        <div class="levelCards"><span></span><span></span><span></span><span></span></div>
+        <div class="levelNum">4 <small>kaartjes</small></div><span class="levelPlay">Spelen ▶</span>
+      </button>
+    </div>
+    <button id="projectsBtn" type="button" aria-label="Instellingen" title="Instellingen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 3-.5 2-1.7 1L5 5.5 3 9l1.5 1.5v2L3 14l2 3.5 1.8-.5 1.7 1 .5 2h4l.5-2 1.7-1 1.8.5 2-3.5-1.5-1.5v-2L20 9l-2-3.5-1.8.5-1.7-1-.5-2Z"/><circle cx="11.5" cy="11.5" r="3"/></svg></button>
+    <p class="start-note" id="loadStatus" role="status">De kaartjes komen eraan…</p>
+  </div>
+</div></div>
+
+
+<script>
+const names=['vis','octopus','zeewier','ster','schelp','krab','kwal','zeepaardje','parel'];
+
+const seaNames=[...names];
+let themeProject=null;
+const S3=[
+  ['vis','schelp','krab'],
+  ['octopus','kwal','parel'],
+  ['zeewier','ster','zeepaardje'],
+  ['krab','vis','parel'],
+  ['schelp','octopus','ster'],
+  ['kwal','zeewier','vis'],
+  ['zeepaardje','krab','schelp'],
+  ['parel','ster','octopus'],
+  ['vis','kwal','zeewier'],
+  ['ster','zeepaardje','krab']
+];
+
+const S4=[
+  ['vis','octopus','schelp','krab'],
+  ['kwal','parel','zeewier','ster'],
+  ['zeepaardje','vis','krab','schelp'],
+  ['octopus','ster','parel','kwal'],
+  ['zeewier','krab','vis','zeepaardje'],
+  ['schelp','kwal','octopus','parel'],
+  ['ster','vis','zeewier','krab'],
+  ['parel','zeepaardje','schelp','octopus'],
+  ['krab','kwal','ster','vis'],
+  ['zeewier','parel','zeepaardje','schelp']
+];
+
+const sea=document.querySelector('#sea');
+const slotsEl=document.querySelector('#slots');
+const answerStrip=document.querySelector('#answerStrip');
+const feedback=document.querySelector('#feedback');
+const start=document.querySelector('#start');
+
+const homeButton=document.querySelector('#homeBtn');
+sea.append(homeButton);
+function syncFloat(el,index){
+ el.style.setProperty('--float-delay',(-index*1.7)+'s');
+ el.getAnimations().filter(a=>a.animationName==='answerFloat').forEach(a=>a.startTime=0);
+}
+const cards=[];
+const images={};
+const plops=Array.from({length:4},()=>{const a=new Audio('assets/audio/plop.mp3');a.preload='none';a.volume=.55;return a});
+let plopIndex=0;
+function plop(){const a=plops[plopIndex++%plops.length];a.currentTime=0;a.play().catch(()=>{})}
+function leaveBubble(card,sound=true){
+ const slot=[...slotsEl.children].find(s=>s.dataset.card===card.dataset.n);
+ if(!slot)return false;
+ slot.dataset.card='';slot.classList.remove('filled','correct','wrong');
+ if(sound)plop();return true;
+}
+
+let level=3;
+let streak=0, difficultRounds=0, roundErrors=0, replays=0;
+function assessRound(success){
+ if(demoMode)return 0;
+ if(!success){roundErrors++;streak=0;if(roundErrors===1)difficultRounds++;
+  if(level>1&&(roundErrors>=2||difficultRounds>=2)){level--;streak=0;difficultRounds=0;return -1}
+  return 0;
+ }
+ if(roundErrors===0&&replays===0){streak++;difficultRounds=0}else streak=0;
+ if(streak>=3&&level<Math.min(8,names.length)){level++;streak=0;difficultRounds=0;return 1}
+ return 0;
+}
+function sequence(){
+ const pool=[...names];for(let i=pool.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]]}
+ return pool.slice(0,level);
+}
+
+let current=[];
+let last=-1;
+let z=20;
+let checking=false;
+let selected=null;
+let demoMode=false;
+let demoRun=0;
+let timers=[];
+const demoHand=document.createElement('div');
+demoHand.id='demoHand';demoHand.setAttribute('aria-hidden','true');
+demoHand.innerHTML='<svg viewBox="0 0 64 78"><path d="M23 39V12c0-10 13-10 13 0v20c2-7 12-5 12 2 6-5 13 0 11 6 8 1 6 12 3 19l-7 15H29C17 61 7 54 6 46c-1-8 8-11 13-4l4 5" fill="#fff5dc" stroke="#8d6650" stroke-width="3" stroke-linejoin="round"/><path d="M30 12v18M43 39v10M53 42v9" fill="none" stroke="#e5cdb5" stroke-width="3" stroke-linecap="round"/></svg>';
+sea.append(demoHand);
+function demoPause(ms){return new Promise(resolve=>later(resolve,ms))}
+function syntheticNarrate(text,onStart=()=>{},onFinish=()=>{}){
+ return new Promise(resolve=>{
+  if(!window.speechSynthesis){onStart();later(()=>{onFinish();resolve()},Math.max(1400,text.length*85));return}
+  const u=new SpeechSynthesisUtterance(text);u.lang='nl-NL';u.rate=.78;
+  const voice=speechSynthesis.getVoices().find(v=>v.lang.toLowerCase().startsWith('nl'));if(voice)u.voice=voice;
+  let done=false;const finish=()=>{if(done)return;done=true;onFinish();document.querySelector('#listenBtn').classList.remove('speaking');resolve()};
+  u.onstart=()=>{onStart();document.querySelector('#listenBtn').classList.add('speaking')};u.onend=finish;u.onerror=finish;
+  speechSynthesis.cancel();speechSynthesis.speak(u);
+  later(finish,Math.max(8000,text.length*200));
+ });
+}
+
+const voiceFiles={'Zo speel je het spel.':'zospeeljehetspel','En nu mag jij. Succes!':'ennumagjijsucces','We gaan er eentje meer onthouden.':'eentjemeer','We oefenen met eentje minder.':'eentjeminder'};
+const praiseFiles=['goed01','goed02','goed03'];
+let praiseIndex=0;
+let voiceRun=0,activeVoice=null,finishVoice=null;
+function stopVoice(){voiceRun++;if(activeVoice){activeVoice.pause();activeVoice=null}if(finishVoice){finishVoice();finishVoice=null}}
+async function narrate(text,onStart=()=>{},onFinish=()=>{}){
+ stopVoice();window.speechSynthesis?.cancel();const run=voiceRun;
+ const parts=text.split(', ').filter(Boolean);onStart();
+ document.querySelector('#listenBtn').classList.add('speaking');
+ for(const part of parts){
+  if(run!==voiceRun)break;
+  const file=part==='Goed onthouden!'?praiseFiles[praiseIndex++%praiseFiles.length]:voiceFiles[part]||(names.includes(part)?part:null);
+  const item=themeProject?.items.find(i=>i.word===part);
+  const audioSource=item?item.audio:(file?'spraak/'+file+'.mp3':null);
+  const ok=audioSource&&await new Promise(resolve=>{
+   const audio=new Audio(audioSource);activeVoice=audio;
+   let done=false;let watchdog;const end=value=>{if(done)return;done=true;clearTimeout(watchdog);audio.onplaying=null;audio.pause();audio.onended=audio.onerror=null;activeVoice=null;finishVoice=null;resolve(value)};
+   watchdog=setTimeout(()=>end(false),1800);
+   audio.onplaying=()=>{clearTimeout(watchdog);watchdog=setTimeout(()=>end(false),Math.max(15000,(Number.isFinite(audio.duration)?audio.duration+3:30)*1000))};
+   finishVoice=()=>end(true);audio.onended=()=>end(true);audio.onerror=()=>end(false);audio.play().catch(()=>end(false));
+  });
+  if(run!==voiceRun)break;
+  if(!ok)await syntheticNarrate(part);
+  if(part!==parts[parts.length-1]&&run===voiceRun)await demoPause(750);
+ }
+ if(run===voiceRun){onFinish();document.querySelector('#listenBtn').classList.remove('speaking')}
+}
+async function nextRound(change){
+ const run=demoRun;checking=true;
+ if(change){slotsEl.style.visibility='hidden';await narrate(change>0?'We gaan er eentje meer onthouden.':'We oefenen met eentje minder.');if(run!==demoRun)return}
+ slotsEl.style.visibility='';pick();
+}
+
+function pointHand(x,y,duration=650){demoHand.style.transition=`left ${duration}ms ease-in-out, top ${duration}ms ease-in-out`;demoHand.style.left=(x-21)+'px';demoHand.style.top=(y-5)+'px'}
+function demoControls(active){document.querySelector('#listenBtn').disabled=active;sea.classList.toggle('demonstrating',active)}
+async function startDemo(){
+ const run=++demoRun;demoMode=true;checking=true;demoControls(true);
+ document.querySelector('.play-hint').textContent='Kijk maar! Zo speel je het spel.';
+ current=sequence();last=0;makeSlots();allHome(false);
+ await narrate('Zo speel je het spel.');if(run!==demoRun)return;
+ await demoPause(350);if(run!==demoRun)return;
+ await narrate(current.join(', '));if(run!==demoRun)return;
+ await demoPause(500);if(run!==demoRun)return;
+ demoHand.style.display='block';pointHand(sea.clientWidth*.5,sea.clientHeight-50,0);
+ for(let i=0;i<current.length;i++){
+  const card=cards.find(c=>c.dataset.n===current[i]),slot=slotsEl.children[i];
+  let r=card.getBoundingClientRect(),sr=sea.getBoundingClientRect();
+  pointHand(r.left-sr.left+r.width/2,r.top-sr.top+r.height/2);
+  await demoPause(750);if(run!==demoRun)return;
+  demoHand.classList.add('holding');card.classList.add('dragging');
+  const x=slotsEl.offsetLeft+slot.offsetLeft+(slot.offsetWidth-card.offsetWidth)/2;
+  const y=slotsEl.offsetTop+slot.offsetTop+(slot.offsetHeight-card.offsetHeight)/2;
+  card.style.transition='left 1250ms ease-in-out, top 1250ms ease-in-out';
+  card.style.left=x+'px';card.style.top=y+'px';card.style.zIndex=80;
+  pointHand(x+card.offsetWidth/2,y+card.offsetHeight/2,1250);
+  await demoPause(1300);if(run!==demoRun)return;
+  card.classList.remove('dragging');card.style.transition='';placeInSlot(card,slot);demoHand.classList.remove('holding');
+  await demoPause(600);if(run!==demoRun)return;
+ }
+ demoHand.style.display='none';checking=false;queueCheck();
+}
+async function finishDemo(){
+ const run=demoRun;slotsEl.style.visibility='hidden';clearEffects();allHome(false);slotsEl.replaceChildren();
+ await narrate('En nu mag jij. Succes!');if(run!==demoRun)return;
+ slotsEl.style.visibility='';demoMode=false;demoControls(false);checking=false;
+ document.querySelector('.play-hint').textContent='Luister goed. Wat hoor je eerst?';pick();
+}
+
+let effects=[];
+function animateSea(el,frames,options){
+ const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+ const animation=el.animate(frames,{...options,duration:reduced?1:options.duration});
+ effects.push(animation);return animation;
+}
+function clearEffects(){effects.forEach(a=>a.cancel());effects=[];document.querySelectorAll('.burst-drop').forEach(e=>e.remove());[...cards,...slotsEl.children].forEach(e=>{e.style.visibility='';e.style.animation='';e.classList.remove('bursting','word-active')})}
+function burstBubble(slot,card){
+ const r=slot.getBoundingClientRect(),sr=sea.getBoundingClientRect();
+ plop();
+ slot.classList.add('bursting');
+ animateSea(slot,[{transform:'scale(1)',opacity:1},{transform:'scale(1.15)',opacity:.85,offset:.35},{transform:'scale(1.32)',opacity:0}],{duration:380,fill:'forwards',easing:'ease-out'});
+ animateSea(card,[{transform:'scale(1) rotate(0deg)'},{transform:'scale(.94) rotate(-7deg)',offset:.35},{transform:'scale(1) rotate(5deg)',offset:.7},{transform:'scale(1) rotate(0deg)'}],{duration:430});
+ for(let i=0;i<10;i++){
+  const dot=document.createElement('span');dot.className='burst-drop';
+  const angle=i*Math.PI/5,dx=Math.cos(angle),dy=Math.sin(angle);
+  dot.style.left=(r.left-sr.left+r.width/2+dx*r.width*.4)+'px';dot.style.top=(r.top-sr.top+r.height/2+dy*r.height*.4)+'px';
+  sea.append(dot);
+  animateSea(dot,[{transform:'translate(-50%,-50%) scale(.4)',opacity:1},{transform:`translate(calc(-50% + ${dx*38}px),calc(-50% + ${dy*38+14}px)) scale(1)`,opacity:0}],{duration:550,easing:'ease-out',fill:'forwards'});
+  later(()=>dot.remove(),600);
+ }
+ later(()=>{slot.style.visibility='hidden';returnHome(card,false)},430);
+ later(()=>{
+  // Replace the popped bubble only after the picture has returned to its bank.
+  slot.getAnimations().filter(a=>a.animationName!=='answerFloat').forEach(a=>a.cancel());
+  slot.classList.remove('bursting','wrong');slot.style.visibility='';
+  riseBubble(slot,Number(slot.dataset.index));
+ },1100);
+}
+function riseBubble(slot,index=0,delay=0){
+ const distance=sea.clientHeight-slotsEl.offsetTop-slot.offsetTop+slot.offsetHeight+30;
+ const sway=index%2?-1:1;
+ return animateSea(slot,[
+  {transform:`translate(${sway*25}px,${distance}px) scale(.82)`,opacity:0},
+  {transform:`translate(${-sway*19}px,${distance*.57}px) scale(.91)`,opacity:.8,offset:.38},
+  {transform:`translate(${sway*11}px,${distance*.16}px) scale(.98)`,opacity:1,offset:.72},
+  {transform:`translate(${-sway*3}px,-5px) scale(1.01)`,opacity:1,offset:.93},
+  {transform:'translate(0,0) scale(1)',opacity:1}
+ ],{duration:1600,delay,fill:'backwards',easing:'cubic-bezier(.2,.55,.3,1)'});
+}
+function floatAway(slots){
+ slots.forEach((slot,i)=>{
+  const card=slotCard(slot);
+  const distance=slotsEl.offsetTop+slot.offsetTop+slot.offsetHeight+80;
+  const frames=[{transform:'translate(0,0)',opacity:1},{transform:`translate(${-16+i*3}px,${-distance*.35}px)`,opacity:1,offset:.4},{transform:`translate(${18-i*4}px,${-distance*.75}px)`,opacity:1,offset:.8},{transform:`translate(0,${-distance}px)`,opacity:0}];
+  for(const el of [slot,card])if(el)animateSea(el,frames,{duration:2400,delay:i*90,fill:'forwards',easing:'ease-in'});
+ });
+}
+function later(fn,ms){const id=window.setTimeout(fn,ms);timers.push(id);return id}
+function cancelRound(){slotsEl.style.visibility='';demoRun++;demoMode=false;demoControls(false);demoHand.style.display='none';demoHand.classList.remove('holding');document.querySelector('.play-hint').textContent='Luister goed. Wat hoor je eerst?';cards.forEach(c=>{c.classList.remove('dragging');c.style.transition=''});clearEffects();document.querySelector('#listenBtn').classList.remove('speaking');timers.forEach(clearTimeout);timers=[];stopVoice();window.speechSynthesis?.cancel();checking=false;selected=null;cards.forEach(c=>c.classList.remove('selected'));document.querySelector('.celebration').replaceChildren();feedback.classList.remove('show')}
+function announce(text){document.querySelector('#announcement').textContent=text}
+function celebrate(){
+  const layer=document.querySelector('.celebration');layer.replaceChildren();
+  for(let i=0;i<16;i++){const star=document.createElement('span');star.className='spark';star.textContent='✦';star.style.setProperty('--x',Math.cos(i*Math.PI/8)*(120+Math.random()*180)+'px');star.style.setProperty('--y',Math.sin(i*Math.PI/8)*180+'px');star.style.setProperty('--delay',i*15+'ms');layer.append(star)}
+  later(()=>layer.replaceChildren(),2000);
+}
+
+
+function bankLayout(){
+  const r=sea.getBoundingClientRect();
+  const cols=Math.min(names.length,r.width<600?5:9);
+  const gap=r.width<600?10:Math.min(14,r.width*.008);
+  const rows=Math.ceil(names.length/cols);
+  const w=Math.min(126,Math.floor((r.width-48-gap*(cols-1))/cols),Math.floor((r.height*.34-gap*(rows-1))/rows/1.27));
+  const h=w*1.27;
+  const bankH=rows*h+(rows-1)*gap+32;
+  document.querySelector('#bank').style.height=bankH+'px';
+  const total=w*cols+gap*(cols-1);
+  return{r,w,h,gap,cols,x:(r.width-total)/2,y:r.height-15-bankH+16}
+}
+function homePositions(){
+  const a=bankLayout();
+  return cards.map((_,i)=>({x:a.x+(i%a.cols)*(a.w+a.gap)+(i>=a.cols?(a.w+a.gap)/2:0),y:a.y+Math.floor(i/a.cols)*(a.h+a.gap),w:a.w}))
+}
+
+function moveCard(card,x,y,animate=true){
+  if(!animate)card.style.transition='none';
+  card.style.left=x+'px';
+  card.style.top=y+'px';
+  card.style.zIndex=++z;
+  if(!animate){
+    card.offsetHeight;
+    card.style.transition=''
+  }
+}
+
+function clearSlotState(){
+  document.querySelectorAll('.slot').forEach(s=>{
+    s.dataset.card='';
+    s.classList.remove('filled','correct','wrong')
+  })
+}
+
+function allHome(animate=true){
+  if(animate&&[...slotsEl.children].some(s=>s.dataset.card))plop();
+  clearSlotState();
+  const p=homePositions();
+  cards.forEach((c,i)=>{
+    c.classList.remove('locked','wrongCard','afloat');
+    c.style.width=p[i].w+'px';
+    moveCard(c,p[i].x,p[i].y,animate)
+  })
+}
+
+function makeSlots(){
+  slotsEl.innerHTML='';
+  slotsEl.dataset.level=level;
+  slotsEl.style.setProperty('--slot-count',level>4?Math.ceil(level/2):level);
+  for(let i=0;i<level;i++){
+    const s=document.createElement('div');
+    s.className='slot';
+    s.textContent=i+1;
+    s.dataset.index=i;
+    s.dataset.card='';
+    s.tabIndex=0;s.setAttribute('role','button');s.setAttribute('aria-label','Plek '+(i+1));
+    const place=()=>{if(selected&&!checking&&!selected.classList.contains('locked')){placeInSlot(selected,s);selected.classList.remove('selected');selected=null}};
+    s.addEventListener('click',place);s.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();place()}});
+    slotsEl.appendChild(s);syncFloat(s,i)
+  }
+}
+
+function pick(){
+  roundErrors=0;replays=0;
+  const previous=current.join(',');
+  do{current=sequence()}while(current.join(',')===previous);
+  answerStrip.classList.remove('show');
+  makeSlots();
+  allHome(true);
+  checking=true;document.querySelector('#listenBtn').disabled=true;
+  [...slotsEl.children].forEach((slot,i)=>riseBubble(slot,i,i*130));
+  later(()=>speak(),1750+(level-1)*130)
+}
+
+async function speak(){
+ if(!current.length)return;
+ const run=demoRun;
+ checking=true;document.querySelector('#listenBtn').disabled=true;
+ selected=null;cards.forEach(c=>c.classList.remove('selected'));
+ try{await narrate(current.join(', '))}
+ finally{if(run===demoRun){checking=false;document.querySelector('#listenBtn').disabled=demoMode}}
+}
+
+function slotCard(slot){
+  return cards.find(c=>c.dataset.n===slot.dataset.card)
+}
+
+function snap(card){
+  let best=null,dist=Infinity;
+
+  document.querySelectorAll('.slot').forEach(s=>{
+    const r=s.getBoundingClientRect();
+    const c=card.getBoundingClientRect();
+    const d=Math.hypot(
+      c.left+c.width/2-(r.left+r.width/2),
+      c.top+c.height/2-(r.top+r.height/2)
+    );
+    if(d<dist){dist=d;best=s}
+  });
+
+  if(!best||dist>130){
+    returnHome(card);
+    return
+  }
+
+  placeInSlot(card,best)
+}
+
+function placeInSlot(card,best,sound=true){
+  const changed=best.dataset.card!==card.dataset.n;
+  const occupied=slotCard(best);
+  if(occupied&&occupied!==card&&occupied.classList.contains("locked"))return;
+  if(occupied&&occupied!==card)returnHome(occupied);
+  if(changed&&sound)leaveBubble(card);
+
+  document.querySelectorAll('.slot').forEach(s=>{
+    if(s.dataset.card===card.dataset.n){
+      s.dataset.card='';
+      s.classList.remove('filled')
+    }
+  });
+
+  if(changed&&sound)plop();
+  best.dataset.card=card.dataset.n;
+  best.classList.add('filled');
+
+  card.style.width=Math.min(homePositions()[cards.indexOf(card)].w,best.offsetWidth*.54)+'px';
+  const br={left:slotsEl.offsetLeft+best.offsetLeft,top:slotsEl.offsetTop+best.offsetTop,width:best.offsetWidth,height:best.offsetHeight};
+  const sr={left:0,top:0};
+  const cr=card.getBoundingClientRect();
+  card.classList.add('afloat');syncFloat(card,Number(best.dataset.index));
+
+  moveCard(
+    card,
+    br.left-sr.left+(br.width-cr.width)/2,
+    br.top-sr.top+(br.height-cr.height)/2,
+    true
+  );
+  if(changed&&sound)queueCheck();
+}
+
+function returnHome(card,sound=true){
+  leaveBubble(card,sound);
+  document.querySelectorAll('.slot').forEach(s=>{
+    if(s.dataset.card===card.dataset.n){
+      s.dataset.card='';
+      s.classList.remove('filled','correct','wrong')
+    }
+  });
+
+  const i=cards.indexOf(card);
+  const p=homePositions()[i];
+  card.classList.remove('locked','wrongCard','afloat');
+  card.style.width=p.w+'px';
+  moveCard(card,p.x,p.y,true)
+}
+
+function showAnswer(){
+  answerStrip.innerHTML='';
+  current.forEach(n=>{
+    const im=document.createElement('img');
+    im.className='answerPic';
+    im.src=images[n];
+    im.alt='';
+    answerStrip.appendChild(im)
+  });
+  answerStrip.classList.add('show')
+}
+
+function pop(icon){
+  feedback.textContent=icon;
+  feedback.classList.add('show');
+  later(()=>feedback.classList.remove('show'),1100)
+}
+
+function queueCheck(){
+ if(checking||!current.length||slotsEl.children.length!==level||[...slotsEl.children].some(s=>!s.dataset.card))return;
+ checking=true;
+ document.querySelector('#listenBtn').disabled=true;
+ later(()=>check(),700);
+}
+async function check(){
+ const run=demoRun;
+ const ss=[...slotsEl.children];
+ if(ss.some(s=>!s.dataset.card)){checking=false;document.querySelector('#listenBtn').disabled=demoMode;return}
+ checking=true;
+ stopVoice();window.speechSynthesis?.cancel();
+ document.querySelector('#listenBtn').classList.remove('speaking');
+ const wrong=[];
+ let lastBurst=0;
+ for(let i=0;i<ss.length;i++){
+  const slot=ss[i],card=slotCard(slot);
+  slot.classList.add('word-active');
+  await demoPause(380);
+  if(run!==demoRun)return;
+  slot.classList.remove('word-active');
+  if(slot.dataset.card===current[i]){slot.classList.add('correct');card?.classList.add('locked')}
+  else {wrong.push({slot,card});burstBubble(slot,card);lastBurst=performance.now()}
+  await demoPause(240);if(run!==demoRun)return;
+ }
+ if(!wrong.length){
+  const change=assessRound(true);
+  announce('Goed onthouden!');floatAway(ss);
+  const praise=narrate('Goed onthouden!');
+  await Promise.all([praise,demoPause(Math.max(2850,2400+(ss.length-1)*90))]);
+  if(run!==demoRun)return;
+  if(demoMode){finishDemo()}else{clearEffects();allHome(false);nextRound(change)};
+ }else{
+  const change=assessRound(false);
+  announce('Probeer het nog eens.');
+  later(()=>{clearEffects();if(change<0){allHome(false);nextRound(change);return}checking=false;document.querySelector('#listenBtn').disabled=demoMode;speak()},Math.max(0,2800-(performance.now()-lastBurst)));
+ }
+}
+
+function drag(card){
+  let sx=0,sy=0,ox=0,oy=0,dragging=false;
+
+  card.addEventListener('pointerdown',e=>{
+    if(checking||card.classList.contains('locked'))return;
+
+    e.preventDefault();
+    if(card.classList.contains('afloat')){
+      const rect=card.getBoundingClientRect(),parent=sea.getBoundingClientRect();
+      card.classList.remove('afloat');card.style.top=(rect.top-parent.top)+'px';
+    }
+    sx=e.clientX;
+    sy=e.clientY;
+    ox=parseFloat(card.style.left)||0;
+    oy=parseFloat(card.style.top)||0;
+
+    card.setPointerCapture(e.pointerId);
+    card.classList.add('dragging');
+    card.style.transition='none';
+    dragging=true
+  });
+
+  card.addEventListener('pointermove',e=>{
+    if(!dragging)return;
+    if(checking){dragging=false;card.classList.remove('dragging');card.style.transition='';returnHome(card);return}
+
+    if(Math.hypot(e.clientX-sx,e.clientY-sy)>8)leaveBubble(card);
+    const r=sea.getBoundingClientRect();
+    const q=card.getBoundingClientRect();
+
+    let x=Math.max(2,Math.min(ox+e.clientX-sx,r.width-q.width-2));
+    let y=Math.max(2,Math.min(oy+e.clientY-sy,r.height-q.height-2));
+
+    card.style.left=x+'px';
+    card.style.top=y+'px';
+    card.style.zIndex=++z
+  });
+
+  card.addEventListener('pointerup',e=>{
+    if(!dragging)return;
+    if(checking){dragging=false;card.classList.remove('dragging');card.style.transition='';returnHome(card);return}
+
+    dragging=false;
+    card.classList.remove('dragging');
+    card.style.transition='';
+
+    try{card.releasePointerCapture(e.pointerId)}catch{}
+    const oldSlot=[...slotsEl.children].find(s=>s.dataset.card===card.dataset.n);
+    if(Math.hypot(e.clientX-sx,e.clientY-sy)<8){
+      if(oldSlot)placeInSlot(card,oldSlot);
+      const wasSelected=selected===card;cards.forEach(c=>c.classList.remove('selected'));selected=wasSelected?null:card;if(selected)card.classList.add('selected');
+    }else{snap(card)}
+  });
+  card.addEventListener('pointercancel',()=>{dragging=false;card.classList.remove('dragging');card.style.transition='';returnHome(card)});
+  card.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&!checking&&!card.classList.contains('locked')){e.preventDefault();cards.forEach(c=>c.classList.remove('selected'));selected=card;card.classList.add('selected')}})
+}
+
+async function load(){
+  try{
+    cards.forEach(c=>c.remove());cards.length=0;
+    names.forEach(n=>{
+      images[n]=themeProject?themeProject.items.find(i=>i.word===n).image:'kaartjes/'+n+'.png';
+
+      const c=document.createElement('div');
+      c.className='card';
+      c.dataset.n=n;
+      c.tabIndex=0;c.setAttribute('role','button');c.setAttribute('aria-label',n);
+      const img=document.createElement('img');img.src=images[n];img.alt=n;c.appendChild(img);
+
+      sea.appendChild(c);
+      cards.push(c);
+      drag(c)
+    });
+
+    await Promise.all(cards.map(c=>c.querySelector('img').decode()));
+    allHome(false);
+    document.querySelectorAll('.levelBtn').forEach(b=>b.disabled=false);
+    document.querySelector('#loadStatus').textContent='Kies met hoeveel kaartjes je speelt.';
+  }catch(err){
+    document.querySelector('#loadStatus').textContent='De kaartjes konden niet laden. Vernieuw de pagina om opnieuw te proberen.';
+    console.error(err)
+  }
+}
+
+document.querySelectorAll('.levelBtn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    cancelRound();
+    plop();
+    sea.classList.add('playing');
+    level=Number(btn.dataset.level);
+    last=-1;streak=0;difficultRounds=0;roundErrors=0;replays=0;
+    start.style.display='none';
+    startDemo()
+  })
+});
+
+document.querySelector('#homeBtn').addEventListener('click',()=>{
+  cancelRound();
+  sea.classList.remove('playing');
+  answerStrip.classList.remove('show');
+  allHome(true);
+  current=[];
+  start.style.display='flex'
+});
+
+document.querySelector('#listenBtn').addEventListener('click',()=>{replays++;speak()});
+
+
+window.addEventListener('resize',()=>{
+  if(demoMode){cancelRound();startDemo();return}
+  if(checking)cancelRound();
+  if(start.style.display!=='none'){
+    allHome(false);
+    return
+  }
+
+  const ss=[...document.querySelectorAll('.slot')];
+  const placed=ss.map(s=>s.dataset.card);
+
+  allHome(false);
+  makeSlots();
+
+  const newSlots=[...document.querySelectorAll('.slot')];
+
+  placed.forEach((name,i)=>{
+    if(!name)return;
+
+    const card=cards.find(c=>c.dataset.n===name);
+    const slot=newSlots[i];
+    slot.dataset.card=name;
+    slot.classList.add('filled');
+
+    placeInSlot(card,slot,false)
+  });
+  queueCheck();
+});
+
+if('speechSynthesis' in window){
+  window.speechSynthesis.getVoices();
+  window.speechSynthesis.onvoiceschanged=()=>window.speechSynthesis.getVoices()
+}
+
+</script>
+<script src="vendor/lame.min.js"></script>
+<script src="audio-tools.js"></script>
+<script src="projects.js"></script>
+</body>
+</html>
