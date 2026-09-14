@@ -320,6 +320,17 @@ let praiseIndex=0;
 let voiceRun=0,activeVoice=null,finishVoice=null;
 // Reuse the player first started by the level-button tap (Safari media permission).
 const voicePlayer=new Audio();voicePlayer.preload='auto';
+// Fetch the small standard recordings in advance, so network latency is not
+// added between words. Playback still uses the player unlocked by the first tap.
+const readyRecordings=new Map();
+for(const file of new Set([...Object.values(voiceFiles),...praiseFiles,...names])){
+ const source='spraak/'+file+'.mp3';
+ fetch(source).then(response=>{
+  if(!response.ok)throw new Error('Audio unavailable');
+  return response.blob();
+ }).then(blob=>readyRecordings.set(source,URL.createObjectURL(blob))).catch(()=>{});
+}
+
 function stopVoice(){voiceRun++;if(activeVoice){activeVoice.pause();activeVoice=null}if(finishVoice){finishVoice();finishVoice=null}}
 async function narrate(text,onStart=()=>{},onFinish=()=>{}){
  stopVoice();window.speechSynthesis?.cancel();const run=voiceRun;
@@ -331,7 +342,7 @@ async function narrate(text,onStart=()=>{},onFinish=()=>{}){
   const item=themeProject?.items.find(i=>i.word===part);
   const audioSource=item?item.audio:(file?'spraak/'+file+'.mp3':null);
   const ok=audioSource&&await new Promise(resolve=>{
-   const audio=voicePlayer;audio.src=audioSource;activeVoice=audio;
+   const audio=voicePlayer;audio.src=readyRecordings.get(audioSource)||audioSource;activeVoice=audio;
    let done=false;let watchdog;const end=value=>{if(done)return;done=true;clearTimeout(watchdog);audio.onplaying=null;audio.pause();audio.onended=audio.onerror=null;activeVoice=null;finishVoice=null;resolve(value)};
    watchdog=setTimeout(()=>end(false),8000);
    audio.onplaying=()=>{clearTimeout(watchdog);watchdog=setTimeout(()=>end(false),Math.max(15000,(Number.isFinite(audio.duration)?audio.duration+3:30)*1000))};
@@ -339,7 +350,7 @@ async function narrate(text,onStart=()=>{},onFinish=()=>{}){
   });
   if(run!==voiceRun)break;
   if(!ok)await syntheticNarrate(part);
-  if(part!==parts[parts.length-1]&&run===voiceRun)await demoPause(450);
+  if(part!==parts[parts.length-1]&&run===voiceRun)await demoPause(600);
  }
  if(run===voiceRun){onFinish();document.querySelector('#listenBtn').classList.remove('speaking')}
 }
