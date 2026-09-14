@@ -339,7 +339,7 @@ async function narrate(text,onStart=()=>{},onFinish=()=>{}){
   });
   if(run!==voiceRun)break;
   if(!ok)await syntheticNarrate(part);
-  if(part!==parts[parts.length-1]&&run===voiceRun)await demoPause(750);
+  if(part!==parts[parts.length-1]&&run===voiceRun)await demoPause(450);
  }
  if(run===voiceRun){onFinish();document.querySelector('#listenBtn').classList.remove('speaking')}
 }
