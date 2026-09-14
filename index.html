@@ -318,6 +318,8 @@ const voiceFiles={'Zo speel je het spel.':'zospeeljehetspel','En nu mag jij. Suc
 const praiseFiles=['goed01','goed02','goed03'];
 let praiseIndex=0;
 let voiceRun=0,activeVoice=null,finishVoice=null;
+// Reuse the player first started by the level-button tap (Safari media permission).
+const voicePlayer=new Audio();voicePlayer.preload='auto';
 function stopVoice(){voiceRun++;if(activeVoice){activeVoice.pause();activeVoice=null}if(finishVoice){finishVoice();finishVoice=null}}
 async function narrate(text,onStart=()=>{},onFinish=()=>{}){
  stopVoice();window.speechSynthesis?.cancel();const run=voiceRun;
@@ -329,9 +331,9 @@ async function narrate(text,onStart=()=>{},onFinish=()=>{}){
   const item=themeProject?.items.find(i=>i.word===part);
   const audioSource=item?item.audio:(file?'spraak/'+file+'.mp3':null);
   const ok=audioSource&&await new Promise(resolve=>{
-   const audio=new Audio(audioSource);activeVoice=audio;
+   const audio=voicePlayer;audio.src=audioSource;activeVoice=audio;
    let done=false;let watchdog;const end=value=>{if(done)return;done=true;clearTimeout(watchdog);audio.onplaying=null;audio.pause();audio.onended=audio.onerror=null;activeVoice=null;finishVoice=null;resolve(value)};
-   watchdog=setTimeout(()=>end(false),1800);
+   watchdog=setTimeout(()=>end(false),8000);
    audio.onplaying=()=>{clearTimeout(watchdog);watchdog=setTimeout(()=>end(false),Math.max(15000,(Number.isFinite(audio.duration)?audio.duration+3:30)*1000))};
    finishVoice=()=>end(true);audio.onended=()=>end(true);audio.onerror=()=>end(false);audio.play().catch(()=>end(false));
   });
@@ -763,9 +765,12 @@ document.querySelector('#homeBtn').addEventListener('click',()=>{
 document.querySelector('#listenBtn').addEventListener('click',()=>{replays++;speak()});
 
 
-window.addEventListener('resize',()=>{
-  if(demoMode){cancelRound();startDemo();return}
-  if(checking)cancelRound();
+let resizeTimer;
+function resizeGame(){
+  // Safari's browser bars can resize the viewport during narration or feedback.
+  // Keep the round and its awaited timers alive, then lay out once it is idle.
+  clearTimeout(resizeTimer);
+  if(demoMode||checking){resizeTimer=setTimeout(resizeGame,250);return}
   if(start.style.display!=='none'){
     allHome(false);
     return
@@ -790,7 +795,8 @@ window.addEventListener('resize',()=>{
     placeInSlot(card,slot,false)
   });
   queueCheck();
-});
+}
+window.addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(resizeGame,150)});
 
 if('speechSynthesis' in window){
   window.speechSynthesis.getVoices();
