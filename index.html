@@ -361,7 +361,7 @@ const sequenceDecoder=(()=>{
   return pending;
  }
  function combine(buffers){
-  const gap=Math.round(rate*.6);
+  const gap=Math.round(rate*.7);
   const samples=buffers.reduce((sum,b)=>sum+b.length,0)+gap*(buffers.length-1);
   const data=new ArrayBuffer(44+samples*2),view=new DataView(data);
   const text=(offset,value)=>{for(let i=0;i<value.length;i++)view.setUint8(offset+i,value.charCodeAt(i))};
@@ -432,7 +432,7 @@ async function narrate(text,onStart=()=>{},onFinish=()=>{}){
   const ok=audioSource&&await playVoiceSource(audioSource);
   if(run!==voiceRun)break;
   if(!ok)await syntheticNarrate(part);
-  if(part!==parts[parts.length-1]&&run===voiceRun)await demoPause(600);
+  if(part!==parts[parts.length-1]&&run===voiceRun)await demoPause(700);
  }
  if(run===voiceRun){onFinish();document.querySelector('#listenBtn').classList.remove('speaking')}
 }
