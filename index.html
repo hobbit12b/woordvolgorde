@@ -331,23 +331,105 @@ for(const file of new Set([...Object.values(voiceFiles),...praiseFiles,...names]
  }).then(blob=>readyRecordings.set(source,URL.createObjectURL(blob))).catch(()=>{});
 }
 
+
+const sequenceDecoder=(()=>{
+ const cache=new Map(),rate=44100;
+ let context;
+ function decode(source){
+  if(cache.has(source))return cache.get(source);
+  const pending=(async()=>{
+   const Context=window.OfflineAudioContext||window.webkitOfflineAudioContext;
+   if(!Context)throw new Error('Audio decoding unavailable');
+   context=context||new Context(1,1,rate);
+   const controller=new AbortController();
+   let timeout;
+   try{
+    return await Promise.race([
+     (async()=>{
+      const response=await fetch(readyRecordings.get(source)||source,{signal:controller.signal});
+      if(!response.ok)throw new Error('Recording unavailable');
+      const bytes=await response.arrayBuffer();
+      return await new Promise((resolve,reject)=>context.decodeAudioData(bytes,resolve,reject));
+     })(),
+     new Promise((_,reject)=>{timeout=setTimeout(()=>{controller.abort();reject(new Error('Audio preparation timed out'))},8000)})
+    ]);
+   }finally{clearTimeout(timeout)}
+  })();
+  cache.set(source,pending);
+  if(cache.size>32)cache.delete(cache.keys().next().value);
+  pending.catch(()=>{if(cache.get(source)===pending)cache.delete(source)});
+  return pending;
+ }
+ function combine(buffers){
+  const gap=Math.round(rate*.6);
+  const samples=buffers.reduce((sum,b)=>sum+b.length,0)+gap*(buffers.length-1);
+  const data=new ArrayBuffer(44+samples*2),view=new DataView(data);
+  const text=(offset,value)=>{for(let i=0;i<value.length;i++)view.setUint8(offset+i,value.charCodeAt(i))};
+  text(0,'RIFF');view.setUint32(4,36+samples*2,true);text(8,'WAVE');text(12,'fmt ');
+  view.setUint32(16,16,true);view.setUint16(20,1,true);view.setUint16(22,1,true);
+  view.setUint32(24,rate,true);view.setUint32(28,rate*2,true);view.setUint16(32,2,true);view.setUint16(34,16,true);
+  text(36,'data');view.setUint32(40,samples*2,true);
+  let offset=44;
+  buffers.forEach((buffer,index)=>{
+   const channels=Array.from({length:buffer.numberOfChannels},(_,i)=>buffer.getChannelData(i));
+   for(let i=0;i<buffer.length;i++){
+    let value=0;for(const channel of channels)value+=channel[i]/channels.length;
+    value=Math.max(-1,Math.min(1,value));
+    view.setInt16(offset,Math.round(value*(value<0?32768:32767)),true);offset+=2;
+   }
+   if(index<buffers.length-1)offset+=gap*2;
+  });
+  return new Blob([data],{type:'audio/wav'});
+ }
+ return {prepare:async sources=>combine(await Promise.all(sources.map(decode)))};
+})();
+function playVoiceSource(source){
+ return new Promise(resolve=>{
+  const audio=voicePlayer;audio.src=readyRecordings.get(source)||source;activeVoice=audio;
+  let done=false,watchdog;
+  const end=value=>{
+   if(done)return;done=true;clearTimeout(watchdog);
+   audio.onplaying=audio.onended=audio.onerror=null;audio.pause();
+   activeVoice=null;finishVoice=null;resolve(value);
+  };
+  watchdog=setTimeout(()=>end(false),8000);
+  audio.onplaying=()=>{clearTimeout(watchdog);watchdog=setTimeout(()=>end(false),Math.max(15000,(Number.isFinite(audio.duration)?audio.duration+3:120)*1000))};
+  finishVoice=()=>end(true);audio.onended=()=>end(true);audio.onerror=()=>end(false);
+  try{audio.play().catch(()=>end(false))}catch{end(false)}
+ });
+}
+
 function stopVoice(){voiceRun++;if(activeVoice){activeVoice.pause();activeVoice=null}if(finishVoice){finishVoice();finishVoice=null}}
 async function narrate(text,onStart=()=>{},onFinish=()=>{}){
  stopVoice();window.speechSynthesis?.cancel();const run=voiceRun;
  const parts=text.split(', ').filter(Boolean);onStart();
  document.querySelector('#listenBtn').classList.add('speaking');
+ // Build each chosen sequence as one PCM recording; no media restarts between words.
+ if(parts.length>1&&parts.every(part=>names.includes(part))){
+  const sources=parts.map(part=>{
+   const item=themeProject?.items.find(i=>i.word===part);
+   return item?item.audio:'spraak/'+part+'.mp3';
+  });
+  if(sources.every(Boolean)){
+   let url;
+   try{
+    const blob=await sequenceDecoder.prepare(sources);
+    if(run!==voiceRun)return;
+    url=URL.createObjectURL(blob);
+    const ok=await playVoiceSource(url);
+    if(run!==voiceRun)return;
+    if(ok){onFinish();document.querySelector('#listenBtn').classList.remove('speaking');return}
+   }catch(error){console.warn('Sequence audio unavailable; using individual recordings.',error)}
+   finally{if(url)URL.revokeObjectURL(url)}
+  }
+ }
+ if(run!==voiceRun)return;
  for(const part of parts){
   if(run!==voiceRun)break;
   const file=part==='Goed onthouden!'?praiseFiles[praiseIndex++%praiseFiles.length]:voiceFiles[part]||(names.includes(part)?part:null);
   const item=themeProject?.items.find(i=>i.word===part);
   const audioSource=item?item.audio:(file?'spraak/'+file+'.mp3':null);
-  const ok=audioSource&&await new Promise(resolve=>{
-   const audio=voicePlayer;audio.src=readyRecordings.get(audioSource)||audioSource;activeVoice=audio;
-   let done=false;let watchdog;const end=value=>{if(done)return;done=true;clearTimeout(watchdog);audio.onplaying=null;audio.pause();audio.onended=audio.onerror=null;activeVoice=null;finishVoice=null;resolve(value)};
-   watchdog=setTimeout(()=>end(false),8000);
-   audio.onplaying=()=>{clearTimeout(watchdog);watchdog=setTimeout(()=>end(false),Math.max(15000,(Number.isFinite(audio.duration)?audio.duration+3:30)*1000))};
-   finishVoice=()=>end(true);audio.onended=()=>end(true);audio.onerror=()=>end(false);audio.play().catch(()=>end(false));
-  });
+  const ok=audioSource&&await playVoiceSource(audioSource);
   if(run!==voiceRun)break;
   if(!ok)await syntheticNarrate(part);
   if(part!==parts[parts.length-1]&&run===voiceRun)await demoPause(600);
